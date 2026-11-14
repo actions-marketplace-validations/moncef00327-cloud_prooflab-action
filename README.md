@@ -47,6 +47,10 @@ jobs:
           # open-pr: true    # optional; then grant contents: write and pull-requests: write
 ```
 
+For `open-pr: true` the job needs `permissions: {contents: write, pull-requests: write}` and the repository setting
+*Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*. The PR is opened only when
+every check of the patched config passed, from a new `prooflab/x25519mlkem768-<run id>` branch.
+
 ### Inputs
 
 | Input | Default | Meaning |
@@ -67,9 +71,13 @@ jobs:
 | Role | Image | Why |
 |---|---|---|
 | Test client | `alpine:3.22` + `openssl` | Ships OpenSSL 3.5 with `X25519MLKEM768` |
-| nginx (patched) | `nginx:1.29-alpine` | Built on Alpine with OpenSSL 3.5 |
-| HAProxy (patched) | `haproxy:3.2-alpine` | Built on Alpine with OpenSSL 3.5 |
+| nginx (patched) | `nginx:1.29` / `nginx:1.29-alpine` | Built with OpenSSL 3.5 (the `-alpine` variant is picked when your image was Alpine) |
+| HAProxy (patched) | `haproxy:3.2` / `haproxy:3.2-alpine` | OpenSSL 3.5 |
 | Caddy (patched) | `caddy:2.10-alpine` | Go TLS; X25519MLKEM768 on by default |
+
+Measured by the `image-probe` CI job on 2026-11-14: `nginx:1.27` ships OpenSSL 3.0 (no ML-KEM), `nginx:1.29` and
+`nginx:1.29-alpine` OpenSSL 3.5, `haproxy:2.8` OpenSSL 3.5 (Debian rebuild), `caddy:2.8` no ML-KEM, `caddy:2.10` yes,
+client `alpine:3.22` OpenSSL 3.5. Image contents change over time, so every report prints the version it actually found.
 
 The original config runs on the runtime image from your Dockerfile when it is an official `nginx`, `caddy` or
 `haproxy` image; otherwise on the image above. The CI job `image-probe` prints the library versions of these images.

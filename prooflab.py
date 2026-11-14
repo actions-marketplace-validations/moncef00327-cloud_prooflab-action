@@ -32,8 +32,8 @@ CLIENT_MODERN_GROUPS = "X25519MLKEM768:X25519:prime256v1"
 # Images used when the patched config needs a newer TLS library than the repository's base image provides.
 # Each choice is verified at run time: the report prints the OpenSSL / Go version actually found in the image.
 RECOMMENDED = {
-    "nginx": {"alpine": "nginx:1.29-alpine", "default": "nginx:1.29-alpine"},
-    "haproxy": {"alpine": "haproxy:3.2-alpine", "default": "haproxy:3.2-alpine"},
+    "nginx": {"alpine": "nginx:1.29-alpine", "default": "nginx:1.29"},
+    "haproxy": {"alpine": "haproxy:3.2-alpine", "default": "haproxy:3.2"},
     "caddy": {"alpine": "caddy:2.10-alpine", "default": "caddy:2.10-alpine"},
 }
 DEFAULT_ORIGINAL = {"nginx": "nginx:1.29-alpine", "haproxy": "haproxy:3.2-alpine", "caddy": "caddy:2.10-alpine"}
@@ -252,7 +252,8 @@ class Harness:
             return (("openssl", m.group(1)) if m else (None, out.strip()[:200])), out
         if server == "haproxy":
             out = run(["docker", "run", "--rm", "--entrypoint", "haproxy", image, "-vv"]).stdout
-            m = re.search(r"Running on OpenSSL version\s*:\s*OpenSSL ([\d.]+\w*)", out) or re.search(r"Built with OpenSSL version\s*:\s*OpenSSL ([\d.]+\w*)", out)
+            m = (re.search(r"Running on (?:OpenSSL|SSL library) version\s*:\s*OpenSSL ([\d.]+\w*)", out)
+                 or re.search(r"Built with (?:OpenSSL|SSL library) version\s*:\s*OpenSSL ([\d.]+\w*)", out))
             return (("openssl", m.group(1)) if m else (None, out.strip()[:200])), out
         if server == "caddy":
             out = run(["docker", "run", "--rm", "--entrypoint", "caddy", image, "version"]).stdout.strip()
@@ -669,8 +670,9 @@ def main(argv=None):
     if summary:
         with open(summary, "a") as f:
             f.write(report + "\n")
-    else:
-        print(report)
+    print("::group::ProofLab report")
+    print(report)
+    print("::endgroup::")
     tested = [i for i in items if i["patched_pass"] is not None]
     all_pass = bool(tested) and all(i["patched_pass"] for i in tested)
     set_output("configs-found", len(items))

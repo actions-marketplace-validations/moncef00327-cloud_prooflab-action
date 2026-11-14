@@ -21,7 +21,7 @@ jobs:
     steps:
       - run: |
           for i in nginx:1.27 nginx:1.29 nginx:1.29-alpine; do echo "$i: $(docker run --rm --entrypoint nginx $i -V 2>&1 | grep -i openssl | tr '\n' ' ')"; done
-          for i in haproxy:2.8 haproxy:3.2 haproxy:3.2-alpine; do echo "$i: $(docker run --rm --entrypoint haproxy $i -vv | grep -i 'OpenSSL version' | tr '\n' ' ')"; done
+          for i in haproxy:2.8 haproxy:3.2 haproxy:3.2-alpine; do echo "$i: $(docker run --rm --entrypoint haproxy $i -vv | grep -iE 'ssl library version|openssl version' | tr '\n' ' ')"; done
           for i in caddy:2.8-alpine caddy:2.10-alpine; do echo "$i: $(docker run --rm --entrypoint caddy $i version)"; done
           echo "alpine:3.22 client: $(docker run --rm alpine:3.22 sh -c 'apk add -q --no-cache openssl >/dev/null && openssl version')"
 
@@ -51,3 +51,30 @@ jobs:
           test "$ORIG" = "false"
           test -z "$PR"
           git diff --exit-code   # the action never edits the checkout unless open-pr is true
+
+  open-pr-demo:
+    # Manual only: proves open-pr creates a PR from a prooflab/* branch (never the default branch), then cleans up.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: pl
+        uses: ./
+        with:
+          path: examples/nginx
+          open-pr: "true"
+          iterations: "5"
+      - name: Check the PR, then close it and delete its branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.pl.outputs.pr-url }}
+        run: |
+          test -n "$PR"
+          head=$(gh pr view "$PR" --json headRefName,baseRefName -q '.headRefName + " -> " + .baseRefName')
+          echo "$PR: $head"
+          case "$head" in prooflab/*" -> main") ;; *) exit 1 ;; esac
+          gh pr diff "$PR"
+          gh pr close "$PR" --delete-branch --comment "Closed by the open-pr demo job."
