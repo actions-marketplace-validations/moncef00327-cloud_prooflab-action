@@ -1,0 +1,66 @@
+name: "ProofLab: prove post-quantum TLS works (Quantum Aether)"
+description: "Finds nginx/Caddy/HAProxy TLS configs, proposes X25519MLKEM768 with classical fallback and tests it in containers."
+author: "Quantum Aether"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  path:
+    description: "Directory to scan, relative to the repository root"
+    required: false
+    default: "."
+  test-run:
+    description: "Run the original and patched configs in Docker containers (true/false). false = propose the patch only."
+    required: false
+    default: "true"
+  open-pr:
+    description: "Open a pull request with the patch from a new prooflab/* branch when every check passes (true/false). Never pushes to the default branch. Needs contents: write and pull-requests: write."
+    required: false
+    default: "false"
+  fail-on-error:
+    description: "Fail the job if the patched config fails any check (true/false)"
+    required: false
+    default: "true"
+  iterations:
+    description: "Handshakes per timing measurement"
+    required: false
+    default: "20"
+  github-token:
+    description: "Token used only when open-pr is true"
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  configs-found:
+    description: "Number of TLS configs analysed"
+    value: ${{ steps.prooflab.outputs.configs-found }}
+  patched-pass:
+    description: "true if every patched config passed all checks"
+    value: ${{ steps.prooflab.outputs.patched-pass }}
+  original-post-quantum:
+    description: "true if every original config already negotiated X25519MLKEM768"
+    value: ${{ steps.prooflab.outputs.original-post-quantum }}
+  report-path:
+    description: "Path of the Markdown report"
+    value: ${{ steps.prooflab.outputs.report-path }}
+  pr-url:
+    description: "URL of the opened pull request (empty if none)"
+    value: ${{ steps.prooflab.outputs.pr-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: prooflab
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PL_PATH: ${{ inputs.path }}
+        PL_TEST_RUN: ${{ inputs.test-run }}
+        PL_OPEN_PR: ${{ inputs.open-pr }}
+        PL_FAIL: ${{ inputs.fail-on-error }}
+        PL_ITER: ${{ inputs.iterations }}
+      run: |
+        python3 "$GITHUB_ACTION_PATH/prooflab.py" --path "$PL_PATH" --test-run "$PL_TEST_RUN" \
+          --open-pr "$PL_OPEN_PR" --fail-on-error "$PL_FAIL" --iterations "$PL_ITER" \
+          --report "$RUNNER_TEMP/prooflab-report.md"

@@ -1,0 +1,6 @@
+example.com {
+	tls {
+		curves x25519 secp256r1
+	}
+	respond "ok"
+}

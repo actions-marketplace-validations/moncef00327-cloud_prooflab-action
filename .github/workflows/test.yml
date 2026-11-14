@@ -1,0 +1,53 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
+
+  image-probe:
+    # Documents which TLS library each candidate image ships (the README relies on this).
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for i in nginx:1.27 nginx:1.29 nginx:1.29-alpine; do echo "$i: $(docker run --rm --entrypoint nginx $i -V 2>&1 | grep -i openssl | tr '\n' ' ')"; done
+          for i in haproxy:2.8 haproxy:3.2 haproxy:3.2-alpine; do echo "$i: $(docker run --rm --entrypoint haproxy $i -vv | grep -i 'OpenSSL version' | tr '\n' ' ')"; done
+          for i in caddy:2.8-alpine caddy:2.10-alpine; do echo "$i: $(docker run --rm --entrypoint caddy $i version)"; done
+          echo "alpine:3.22 client: $(docker run --rm alpine:3.22 sh -c 'apk add -q --no-cache openssl >/dev/null && openssl version')"
+
+  fixtures:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [nginx, caddy, haproxy]
+    steps:
+      - uses: actions/checkout@v4
+      - id: pl
+        uses: ./
+        with:
+          path: examples/${{ matrix.example }}
+          iterations: "10"
+      - name: Assert the patch works and the original was not post-quantum
+        env:
+          FOUND: ${{ steps.pl.outputs.configs-found }}
+          PASS: ${{ steps.pl.outputs.patched-pass }}
+          ORIG: ${{ steps.pl.outputs.original-post-quantum }}
+          PR: ${{ steps.pl.outputs.pr-url }}
+        run: |
+          echo "configs=$FOUND patched-pass=$PASS original-post-quantum=$ORIG pr=$PR"
+          test "$FOUND" = "1"
+          test "$PASS" = "true"
+          test "$ORIG" = "false"
+          test -z "$PR"
+          git diff --exit-code   # the action never edits the checkout unless open-pr is true
